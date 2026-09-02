@@ -34,9 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
-# 本地数据（导入的书籍文件、SQLite 数据库）
+# 本地数据（导入的书籍文件、SQLite 数据库及 WAL/SHM 临时文件）
+/data/
 /data/books/
-/data/library.db
 
 # vercel
 .vercel
