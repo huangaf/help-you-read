@@ -55,6 +55,7 @@ Started: 2026-09-05（见 SESSION_DIR 目录时间戳）
 - 中文撰写（用户语言）
 
 ## Now
-P0 ✅ / P1 ✅（四份 draft）/ P2 ✅（docs/持久数据模型对比.md）/ P4 ✅（docs/读书工具研究报告.md）/ **P5 ✅ 需求文档已确认**
-- **P6：技术方案已写盘** `help-you-read/docs/技术方案.md`（writing-plans 纪律适配为设计文档：架构+模块划分+接口+schema DDL+分阶段路线）。spec self-review 已过，修 3 处：①§0 补隐私约束(NF5) ②skills DDL 对齐 SkillManifest(补 source/manifest_json) ③§3.5 公共类型 shape sketch 消除接口悬空引用。**待用户 review**。
-- **下一步**：用户 review 技术方案 → (confirm) P7 AGENTS.md（help-you-read 根）→ [实施阶段：按 phase 产出逐任务 TDD 执行计划]
+P0 ✅ / P1 ✅（四份 draft）/ P2 ✅（docs/持久数据模型对比.md）/ P4 ✅（docs/读书工具研究报告.md）/ **P5 ✅ 需求文档已确认** / P6 ✅（技术方案 commit d9f73c3 + push）/ **P7 ✅ AGENTS.md commit 0f8e155 + push**
+- **P6：技术方案已写盘并修正** `help-you-read/docs/技术方案.md`（writing-plans 纪律适配为设计文档：架构+模块划分+接口+schema DDL+分阶段路线）。spec self-review 已过，修 4 处：①§0 补隐私约束(NF5) ②skills DDL 对齐 SkillManifest(补 source/manifest_json) ③§3.5 公共类型 shape sketch 消除接口悬空引用 ④main.db 表计数 8→9（§3/§4/§5 三处同步）。**已 commit(d9f73c3)+push，工作树干净**。
+- **P7：AGENTS.md 已写盘** `help-you-read/AGENTS.md`（83 行，12 节：项目定位/技术栈/monorepo边界/关键决策/数据模型/v1范围/编码约定/测试TDD/Git规则/文档同步/规格指针/语言规则）。内容与已修正的技术方案一致。**已 commit(0f8e155)+push**。
+- **下一步（B 阶段）**：进入 writing-plans → Phase0 (scaffold) + Phase1 (engine layer) 逐任务 TDD 执行计划
