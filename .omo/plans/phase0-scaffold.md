@@ -664,6 +664,34 @@ git commit -m "docs: Phase0 complete — monorepo scaffold verified" --allow-emp
 
 ---
 
+## Verification Results (2026-07-11)
+
+| # | 场景 | 结果 | 证据 |
+|---|------|------|------|
+| S1 | Workspace 可安装 | ✅ PASS | `pnpm install` exit 0, 3 packages linked |
+| S2 | Engine typecheck clean | ✅ PASS | `tsc --noEmit` exit 0 (packages/engine) |
+| S3 | Core typecheck clean | ✅ PASS | `tsc --noEmit` exit 0 (packages/core) |
+| S4 | App Vite dev server 起 | ✅ PASS | Vite :1420 serves React page (curl verified) |
+| S5 | App typecheck clean | ✅ PASS | `tsc --noEmit` exit 0 (packages/app) |
+| S6 | Tauri desktop window 弹出 | ✅ PASS | `xwininfo` shows "help-you-read" (1200×800, class Help-you-read) |
+| S7 | Cross-package typecheck | ✅ PASS | `pnpm -r typecheck` all 3 packages exit 0 |
+| S8 | Full build pass | ✅ PASS | `pnpm -r run build` → Vite production build 851ms, tsc clean |
+
+**Phase0 验收结论：全部通过。**
+
+### 实施中发现的问题及修复
+
+| 问题 | 修复 |
+|------|------|
+| pnpm 11 废弃 `package.json#pnpm` 字段 | 迁移到 `pnpm-workspace.yaml#onlyBuiltDependencies: [esbuild]` |
+| Tauri 2 `tauri_build::build()` 返回 `()` 非 Result | build.rs 去掉 `.expect()` |
+| Tauri 2 capabilities 需 `identifier` 字段 | default.json 添加 `"identifier": "default"` |
+| Rust crate 名 hyphens→underscores | main.rs: `help_you_read::run()` |
+| Tauri on Linux 需 D-Bus session bus | `dbus-daemon --session` + `DBUS_SESSION_BUS_ADDRESS` env |
+| 窗口检测（GNOME） | `xwininfo -root -tree` 比 xdotool 可靠 |
+
+---
+
 ## Scenarios (Acceptance Contract)
 
 | # | 场景 | Pass 条件（binary observable） | 验证方式 |
