@@ -5,3 +5,6 @@ node_modules/
 # Rust 构建产物（Tauri）
 packages/app/src-tauri/target/
 packages/app/src-tauri/gen/schemas/
+
+# Vite 构建产物
+packages/app/dist/
