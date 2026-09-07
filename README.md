@@ -21,7 +21,7 @@ AI 辅助电子书阅读器。导入 EPUB → 三栏阅读（原文 / 批注 / A
 
 ```
 help-you-read/
-├── package.json              # pnpm workspace root（scripts: dev/build/test/typecheck）
+├── package.json              # pnpm workspace root（scripts: dev[桌面]/dev:web/build/test/typecheck）
 ├── pnpm-workspace.yaml      # workspace 配置（packages/*, onlyBuiltDependencies）
 ├── tsconfig.base.json       # TypeScript strict 基础配置（ES2022, bundler）
 ├── AGENTS.md                # AI 协作者上下文契约（技术栈/边界/规则）
@@ -144,19 +144,19 @@ pnpm dev
 ```
 
 **预期行为：**
-1. Vite dev server 启动于 `http://localhost:1420`（strictPort）
+1. Tauri CLI 先执行 `beforeDevCommand`（Vite dev server 启动于 `http://localhost:1420`，strictPort）
 2. Tauri 编译 Rust 壳（首次 ~3-5 min，后续增量 <1s）
 3. 桌面窗口弹出：标题 "help-you-read"，尺寸 1200×800
 4. 窗口加载 React app（当前为 placeholder 三栏布局）
 
-> **Tauri dev 流程**：`pnpm dev` 触发 `beforeDevCommand: pnpm dev`（Vite），
-> Tauri CLI 监听 :1420，编译 Rust → 启动 webview 窗口。
+> **Tauri dev 流程**：`pnpm dev` → `tauri dev`（Tauri CLI）→ 先执行 `beforeDevCommand: pnpm dev`（在 app 目录 = Vite）→ 编译 Rust → 启动 webview 窗口。
+> `tauri dev` 会自动拉起 Vite，无需手动先启动。
 
 ### Step 4（可选）: 仅前端开发（不弹桌面窗口）
 
 ```bash
 # 只起 Vite dev server，浏览器访问 :1420
-pnpm --filter @hyr/app dev
+pnpm dev:web
 
 # 或
 cd packages/app && pnpm dev
@@ -170,16 +170,62 @@ cargo run          # 直接跑 Rust（需 Vite 已在 :1420）
 cargo build        # 仅编译，不运行
 ```
 
+## 故障排查（FAQ）
+
+### `pnpm dev` panic: "Too many open files" (EMFILE)
+
+**症状：**
+```
+thread '<unnamed>' panicked at .../tauri-cli/src/interface/rust.rs:146
+called `Result::unwrap()` on an `Err` value: Error { kind: Io(... "Too many open files") }
+```
+
+**根因：** 并非真正的 fd 耗尽，而是 **inotify 用户实例数达到上限**。
+Linux 对超出 `fs.inotify.max_user_instances` 的 inotify_init1 调用返回 EMFILE。
+tauri-cli / cargo watch 在 dev 模式下创建文件监听器，实例数用满即触发此 panic。
+多开 opencode / IDE / GUI 应用会快速耗尽默认上限（常为 128）。
+
+**修复：** 提高 `fs.inotify.max_user_instances`（治本，安全、持久）
+```bash
+# 临时（重启失效）
+sudo sysctl -w fs.inotify.max_user_instances=512
+
+# 永久（写入 /etc/sysctl.d，重启仍生效）
+echo "fs.inotify.max_user_instances=512" | sudo tee /etc/sysctl.d/60-inotify.conf
+sudo sysctl --system
+
+# 验证（应输出 512）
+cat /proc/sys/fs/inotify/max_user_instances
+```
+
+> **诊断命令**（确认是否为 inotify 瓶颈）：
+> ```bash
+> cat /proc/sys/fs/inotify/max_user_instances    # 上限
+> ls -l /proc/*/fd | grep -c anon_inode:inotify   # 当前实例用量
+> ```
+
+### D-Bus session bus（Linux headless / SSH）
+
+`pnpm dev` 报 D-Bus 连接失败、或窗口不弹出：headless / SSH 环境无 session bus，
+见「环境要求」手动启动 `dbus-daemon --session` 并导出 `DBUS_SESSION_BUS_ADDRESS`。
+
+### 端口 :1420 被占用
+
+Vite 配置 `strictPort: true`，若旧 dev server / 残留进程占着 :1420：
+```bash
+ss -tlnp | grep 1420          # 找到占用 PID
+kill <PID>                    # 清理残留（确认非当前会话所需）
+```
+
 ## 可用命令速查
 
 | 命令 | 作用 |
 |------|------|
 | `pnpm dev` | Vite + Tauri 桌面窗口（完整开发体验） |
+| `pnpm dev:web` | 仅 Vite dev server（浏览器访问 :1420，不弹窗口） |
 | `pnpm build` | 所有 package 生产构建（tsc + vite build） |
 | `pnpm test` | 所有 package 测试（vitest） |
 | `pnpm typecheck` | 所有 package TypeScript strict 检查 |
-| `pnpm --filter @hyr/app dev` | 仅 Vite（浏览器开发） |
-| `pnpm --filter @hyr/app tauri dev` | 仅 Tauri（需 Vite 已运行） |
 | `pnpm --filter @hyr/core test` | core 包单测 |
 | `pnpm --filter @hyr/engine test` | engine 包单测 |
 

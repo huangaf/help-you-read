@@ -689,6 +689,8 @@ git commit -m "docs: Phase0 complete — monorepo scaffold verified" --allow-emp
 | Rust crate 名 hyphens→underscores | main.rs: `help_you_read::run()` |
 | Tauri on Linux 需 D-Bus session bus | `dbus-daemon --session` + `DBUS_SESSION_BUS_ADDRESS` env |
 | 窗口检测（GNOME） | `xwininfo -root -tree` 比 xdotool 可靠 |
+| root `pnpm dev` 只起 Vite，不弹桌面窗口 | root `dev` 改为 `pnpm --filter @hyr/app tauri dev`，新增 `dev:web`（纯前端）；README 同步修正 |
+| tauri dev panic "Too many open files"（inotify 实例耗尽，非真 fd） | `fs.inotify.max_user_instances` 128→512（/etc/sysctl.d/60-inotify.conf + sysctl --system）；README 故障排查章节 |
 
 ---
 

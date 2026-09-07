@@ -2,7 +2,8 @@
   "name": "help-you-read",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter @hyr/app dev",
+    "dev": "pnpm --filter @hyr/app tauri dev",
+    "dev:web": "pnpm --filter @hyr/app dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
