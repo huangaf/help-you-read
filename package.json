@@ -1,0 +1,17 @@
+{
+  "name": "help-you-read",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @hyr/app dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}
