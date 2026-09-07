@@ -1,3 +1,7 @@
 node_modules/
 .codegraph
 .omo/run-continuation/
+
+# Rust 构建产物（Tauri）
+packages/app/src-tauri/target/
+packages/app/src-tauri/gen/schemas/

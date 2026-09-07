@@ -1,0 +1,5 @@
+{
+  "identifier": "default",
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "permissions": ["core:default"]
+}
