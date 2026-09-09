@@ -8,3 +8,6 @@ packages/app/src-tauri/gen/schemas/
 
 # Vite 构建产物
 packages/app/dist/
+
+# 测试截图产物（@vitest/browser transient，勿提交）
+packages/engine/src/__screenshots__/
