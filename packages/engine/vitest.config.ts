@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    // 默认环境：jsdom（覆盖纯逻辑测试）
+    // 默认环境：jsdom（纯逻辑 / text-walker）；browser 测试用文件级 docblock `// @vitest-environment browser` opt-in
     environment: 'jsdom',
 
     // 注入全局 test 函数（describe / it / expect），无需手动 import
@@ -35,5 +35,10 @@ export default defineConfig({
 
     // 单次运行退出（非 watch 模式）
     retry: 0,
+
+    // zod 为新增运行时依赖，显式纳入 optimizeDeps 避免 Vite 首次优化触发 test reload（flaky）
+    optimizeDeps: {
+      include: ['zod'],
+    },
   },
 });

@@ -16,5 +16,8 @@
     "playwright": "^1.49",
     "typescript": "^5.8.0",
     "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
   }
 }
