@@ -1,6 +1,10 @@
 packages:
   - "packages/*"
 
+allowBuilds:
+  better-sqlite3: true
+  msw: set this to true or false
+
 onlyBuiltDependencies:
   - esbuild
   - msw
