@@ -1,5 +1,8 @@
 node_modules/
 .codegraph
+# start-work 运行时状态（boulder/ledger，勿提交）
+.omo/boulder.json
+.omo/start-work/
 .omo/run-continuation/
 
 # Rust 构建产物（Tauri）
@@ -10,4 +13,7 @@ packages/app/src-tauri/gen/schemas/
 packages/app/dist/
 
 # 测试截图产物（@vitest/browser transient，勿提交）
-packages/engine/src/__screenshots__/
+packages/engine/src/**/__screenshots__/
+
+# 测试语料（EPUB fixture，体积大；合成 fixture 由脚本重建，真实 EPUB 需自备）
+packages/engine/public/books/
