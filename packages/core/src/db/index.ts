@@ -20,7 +20,7 @@ export class Database {
         this.mainDb.exec('PRAGMA foreign_keys=ON');
 
         if (options.localDbPath) {
-            const local = new DatabaseSync(options.localDbPath);
+            const local = new DatabaseSync(options.localDbPath, { allowExtension: true });
             local.exec('PRAGMA journal_mode=WAL');
             local.exec('PRAGMA foreign_keys=ON');
             this.localDb = local;

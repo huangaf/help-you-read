@@ -78,13 +78,13 @@ export const LOCAL_DB_MIGRATIONS: ReadonlyArray<{ version: number; description: 
         version: 1,
         description: 'v1 initial schema — local.db（2表）',
         sql: `
-CREATE TABLE IF NOT EXISTS chunks(
-  id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  chapter_index INTEGER, chapter_title TEXT, content TEXT NOT NULL, token_count INTEGER,
-  start_cfi TEXT, end_cfi TEXT, segment_cfis TEXT DEFAULT '[]',
-  embedding BLOB,
-  updated_at INTEGER NOT NULL
-);
+ CREATE TABLE IF NOT EXISTS chunks(
+   id TEXT PRIMARY KEY, book_id TEXT NOT NULL,
+   chapter_index INTEGER, chapter_title TEXT, content TEXT NOT NULL, token_count INTEGER,
+   start_cfi TEXT, end_cfi TEXT, segment_cfis TEXT DEFAULT '[]',
+   embedding BLOB,
+   updated_at INTEGER NOT NULL
+ );
 CREATE TABLE IF NOT EXISTS vector_index_provenance(
   book_id TEXT PRIMARY KEY, model_kind TEXT, model_id TEXT, endpoint TEXT, dimensions INTEGER, created_at INTEGER NOT NULL
 );

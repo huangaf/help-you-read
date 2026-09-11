@@ -135,8 +135,8 @@ export interface Chunk {
     readonly tokenCount?: number | undefined;
     readonly startCfi?: string | undefined;
     readonly endCfi?: string | undefined;
-    readonly segmentCfis: string[]; // JSON（子段 CFI 列表）
-    readonly embedding?: Uint8Array; // float32 向量（BLOB）
+    readonly segmentCfis?: string[] | undefined; // JSON（子段 CFI 列表）
+    readonly embedding?: Uint8Array | Float32Array | undefined; // 向量（BLOB）
     readonly updatedAt: number;
 }
 
