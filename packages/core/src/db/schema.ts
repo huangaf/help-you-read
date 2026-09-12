@@ -71,6 +71,16 @@ CREATE TABLE IF NOT EXISTS review_items(
 );
 `,
     },
+    {
+        version: 2,
+        description: 'v1.1 — notes 表增加 method 列（标识来源读书方法）',
+        sql: `ALTER TABLE notes ADD COLUMN method TEXT DEFAULT 'ria';`,
+    },
+    {
+        version: 3,
+        description: 'v1.2 — notes 表增加 pinned 列（A2「贴墙」长期卡片标记）',
+        sql: `ALTER TABLE notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;`,
+    },
 ];
 
 export const LOCAL_DB_MIGRATIONS: ReadonlyArray<{ version: number; description: string; sql: string }> = [

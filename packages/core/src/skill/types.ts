@@ -32,6 +32,8 @@ export interface CapabilityTool {
     readonly access: AccessLevel;
     /** 输入参数 schema（zod schema 或 JSON Schema） */
     readonly inputSchema: unknown;
+    /** 工具执行回调（可选；缺省时 SkillRuntime 回退到 JSON 占位） */
+    readonly execute?: ((args: unknown) => string | Promise<string>) | undefined;
 }
 
 /** 技能运行上下文 — 由调用方（UI/上层）提供 */

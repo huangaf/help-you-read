@@ -30,27 +30,26 @@ export class MigrationRunner {
         return row?.v ?? 0;
     }
 
-    // 执行指定迁移列表（幂等）
+    // 执行指定迁移列表（幂等：所有 DDL 使用 IF NOT EXISTS / OR IGNORE）
     run(migrations: ReadonlyArray<Migration>): void {
         this.#ensureMigrationsTable();
         const currentVersion = this.#currentVersion();
 
         for (const migration of migrations) {
-            if (migration.version <= currentVersion) continue; // 已应用，跳过
+            if (migration.version <= currentVersion) continue;
 
-            this.#db.exec('BEGIN');
             try {
-                // 执行 DDL（可能含多条 CREATE TABLE）
                 this.#db.exec(migration.sql);
-                // 记录迁移已应用
-                this.#db.prepare(
-                    'INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)'
-                ).run(migration.version, migration.description, Date.now());
-                this.#db.exec('COMMIT');
             } catch (e) {
-                this.#db.exec('ROLLBACK');
-                throw new Error(`Migration v${migration.version} failed: ${e}`);
+                const msg = e instanceof Error ? e.message : String(e);
+                // ADD COLUMN 对已存在列报 duplicate → 幂等忽略（视为已应用）
+                if (!msg.includes('duplicate column name')) {
+                    throw new Error(`Migration v${migration.version} failed: ${msg}`);
+                }
             }
+            this.#db.prepare(
+                'INSERT OR IGNORE INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)'
+            ).run(migration.version, migration.description, Date.now());
         }
     }
 

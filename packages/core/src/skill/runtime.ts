@@ -154,8 +154,7 @@ export class SkillRuntime {
                     return { ok: false, error: `SKILL_ACCESS_DENIED: skill access "${manifest.access}" 不允许调用工具 "${tool.name}" (requires ${tool.access})` };
                 }
 
-                // 执行工具（v1: JSON 占位；Phase 5 实现实际逻辑）
-                const result = this.#executeTool(tool, toolCall.args);
+                const result = await this.#executeTool(tool, toolCall.args);
                 toolResults.push({ role: 'tool', content: result });
             }
 
@@ -185,8 +184,11 @@ export class SkillRuntime {
         return parts.join('\n') || '（无额外上下文）';
     }
 
-    /** 执行工具（v1: JSON 占位；Phase 5 实现实际逻辑） */
-    #executeTool(tool: CapabilityTool, args: unknown): string {
+    /** 执行工具：有 execute 回调则调用，否则回退到 JSON 占位 */
+    async #executeTool(tool: CapabilityTool, args: unknown): Promise<string> {
+        if (tool.execute) {
+            return tool.execute(args);
+        }
         return JSON.stringify({ tool: tool.name, args });
     }
 

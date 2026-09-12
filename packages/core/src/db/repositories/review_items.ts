@@ -43,6 +43,16 @@ export class ReviewItemsRepository {
         return rows.map(r => this.#toEntity(r));
     }
 
+    listDue(asOf: number): ReviewItem[] {
+        const rows = this.#db.prepare('SELECT * FROM review_items WHERE due_date <= ? ORDER BY due_date').all(asOf) as Record<string, unknown>[];
+        return rows.map(r => this.#toEntity(r));
+    }
+
+    listByBook(bookId: string): ReviewItem[] {
+        const rows = this.#db.prepare('SELECT * FROM review_items WHERE book_id = ? ORDER BY created_at').all(bookId) as Record<string, unknown>[];
+        return rows.map(r => this.#toEntity(r));
+    }
+
     #toEntity(row: Record<string, unknown>): ReviewItem {
         return {
             id: row.id as string, bookId: row.book_id as string,

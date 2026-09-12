@@ -51,6 +51,13 @@ describe('ReviewItemsRepository', () => {
         expect(due[0]!.id).toBe('ri2'); // 排序：最早到期在前
     });
 
+    it('listByBook: 返回该书全部卡片（含未到期）', () => {
+        repo.create(makeItem({ id: 'ri1', dueDate: 5000 }));
+        repo.create(makeItem({ id: 'ri2', dueDate: 9000 }));
+        const all = repo.listByBook('b1');
+        expect(all).toHaveLength(2);
+    });
+
     it('级联删除: 删 book → review_items 全清', () => {
         repo.create(makeItem());
         const booksRepo = new BooksRepository(db.mainDb);

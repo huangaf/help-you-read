@@ -44,6 +44,8 @@ export interface Note {
     readonly cfi?: string | undefined;
     readonly title: string;
     readonly content: string;
+    readonly method?: string | undefined; // 来源读书方法（v1: 'ria'）
+    readonly pinned?: boolean | undefined; // A2「贴墙」长期卡片标记（进复习池）
     readonly createdAt: number;
     readonly updatedAt: number;
 }

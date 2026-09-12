@@ -9,7 +9,12 @@ export class MessagesRepository {
         this.#db.prepare(
             `INSERT INTO messages (id, thread_id, role, content, citations, tool_calls, reasoning, parts_order, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(m.id, m.threadId, m.role, m.content, JSON.stringify(m.citations), JSON.stringify(m.toolCalls), m.reasoning ?? null, m.partsOrder, m.createdAt);
+        ).run(m.id, m.threadId, m.role, m.content,
+            m.citations !== undefined ? JSON.stringify(m.citations) : '[]',
+            m.toolCalls !== undefined ? JSON.stringify(m.toolCalls) : '[]',
+            m.reasoning ?? null,
+            (m.partsOrder as number | undefined) ?? 0,
+            m.createdAt);
     }
 
     get(id: string): Message | null {
@@ -42,10 +47,10 @@ export class MessagesRepository {
         return {
             id: row.id as string, threadId: row.thread_id as string,
             role: row.role as string, content: row.content as string,
-            citations: JSON.parse(row.citations as string),
-            toolCalls: JSON.parse(row.tool_calls as string),
-            reasoning: (row.reasoning as string) ?? undefined,
-            partsOrder: row.parts_order as number,
+            citations: row.citations ? JSON.parse(row.citations as string) : [],
+            toolCalls: row.tool_calls ? JSON.parse(row.tool_calls as string) : [],
+            reasoning: (row.reasoning as string | undefined) ?? undefined,
+            partsOrder: (row.parts_order as number | undefined) ?? 0,
             createdAt: row.created_at as number,
         };
     }

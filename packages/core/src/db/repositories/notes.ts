@@ -7,9 +7,9 @@ export class NotesRepository {
 
     create(n: Note): void {
         this.#db.prepare(
-            `INSERT INTO notes (id, book_id, highlight_id, cfi, title, content, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(n.id, n.bookId, n.highlightId ?? null, n.cfi ?? null, n.title, n.content, n.createdAt, n.updatedAt);
+            `INSERT INTO notes (id, book_id, highlight_id, cfi, title, content, method, pinned, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(n.id, n.bookId, n.highlightId ?? null, n.cfi ?? null, n.title, n.content, n.method ?? 'ria', n.pinned ? 1 : 0, n.createdAt, n.updatedAt);
     }
 
     get(id: string): Note | null {
@@ -25,9 +25,22 @@ export class NotesRepository {
         if (partial.cfi !== undefined) { sets.push('cfi = ?'); values.push(partial.cfi); }
         if (partial.title !== undefined) { sets.push('title = ?'); values.push(partial.title); }
         if (partial.content !== undefined) { sets.push('content = ?'); values.push(partial.content); }
+        if (partial.method !== undefined) { sets.push('method = ?'); values.push(partial.method); }
+        if (partial.pinned !== undefined) { sets.push('pinned = ?'); values.push(partial.pinned ? 1 : 0); }
         if (partial.updatedAt !== undefined) { sets.push('updated_at = ?'); values.push(partial.updatedAt); }
         if (!sets.length) return;
         this.#db.prepare(`UPDATE notes SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
+    }
+
+    setPinned(id: string, pinned: boolean): void {
+        this.#db.prepare('UPDATE notes SET pinned = ?, updated_at = ? WHERE id = ?').run(pinned ? 1 : 0, Date.now(), id);
+    }
+
+    listPinned(bookId?: string): Note[] {
+        const rows = (bookId === undefined
+            ? this.#db.prepare('SELECT * FROM notes WHERE pinned = 1').all()
+            : this.#db.prepare('SELECT * FROM notes WHERE pinned = 1 AND book_id = ?').all(bookId)) as Record<string, unknown>[];
+        return rows.map(r => this.#toEntity(r));
     }
 
     delete(id: string): void { this.#db.prepare('DELETE FROM notes WHERE id = ?').run(id); }
@@ -43,6 +56,8 @@ export class NotesRepository {
             highlightId: (row.highlight_id as string) ?? undefined,
             cfi: (row.cfi as string) ?? undefined,
             title: row.title as string, content: row.content as string,
+            method: (row.method as string) ?? undefined,
+            pinned: (row.pinned as number) === 1,
             createdAt: row.created_at as number, updatedAt: row.updated_at as number,
         };
     }

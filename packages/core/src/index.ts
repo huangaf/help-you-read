@@ -2,7 +2,8 @@
 // Phase2: db (schema + repositories + migrations) — ✓ 已实现
 // Phase3: ai (providers + chunker + retrieval) — ✓ 已实现
 // Phase4: skill (manifest + catalog + runtime + presets) — ✓ 已实现
-// Phase5: tts (TTSEngine abstraction + local impl) — 未开始
+// Phase5: tts (TTSEngine abstraction + local impl) — ✓ 已实现
+//         supermemo (SM-2 scheduling) — ✓ 已实现
 
 export { Database, type DatabaseOptions } from './db/index.js';
 export { MigrationRunner, migrateAll, type Migration } from './db/migrations.js';
@@ -26,3 +27,8 @@ export type { ChatProvider as SkillChatProvider, SkillRuntimeOptions } from './s
 export type { SkillKind, AccessLevel, SkillManifest, CapabilityTool, SkillRunContext, SkillResult } from './skill/index.js';
 export { accessOrder, canAccess, SKILL_KINDS, ACCESS_LEVELS } from './skill/index.js';
 export { promptExample, agentExample, scriptExample } from './skill/index.js';
+export { riaNote } from './skill/presets/ria_note.js';
+export { supermemoCardGen } from './skill/presets/supermemo_card_gen.js';
+export type { Voice, AudioChunk, TTSEngine } from './tts/types.js';
+export { TTSEngineError, EspeakEngine, type SynthesizeOpts } from './tts/espeak.js';
+export { sm2Schedule, type SM2Input, type SM2Result } from './supermemo/sm2.js';

@@ -51,4 +51,30 @@ describe('NotesRepository', () => {
         booksRepo.delete('b1');
         expect(repo.get('n1')).toBeNull(); // ON DELETE CASCADE
     });
+
+    it('pinned: create 时标记长期卡片 → get 往返为 true', () => {
+        repo.create(makeNote({ pinned: true }));
+        expect(repo.get('n1')!.pinned).toBe(true);
+    });
+
+    it('pinned: 未指定时默认 false', () => {
+        repo.create(makeNote());
+        expect(repo.get('n1')!.pinned).toBe(false);
+    });
+
+    it('setPinned: 切换标记并持久化', () => {
+        repo.create(makeNote());
+        repo.setPinned('n1', true);
+        expect(repo.get('n1')!.pinned).toBe(true);
+        repo.setPinned('n1', false);
+        expect(repo.get('n1')!.pinned).toBe(false);
+    });
+
+    it('listPinned: 仅返回已贴墙笔记', () => {
+        repo.create(makeNote({ id: 'n1', pinned: true }));
+        repo.create(makeNote({ id: 'n2', pinned: false }));
+        const pinned = repo.listPinned('b1');
+        expect(pinned).toHaveLength(1);
+        expect(pinned[0]!.id).toBe('n1');
+    });
 });

@@ -9,7 +9,11 @@ export class SkillsRepository {
         this.#db.prepare(
             `INSERT INTO skills (id, name, description, icon, kind, source, access, tools, enabled, manifest_json, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(s.id, s.name, s.description ?? null, s.icon ?? null, s.kind, s.source, s.access, JSON.stringify(s.tools), s.enabled ? 1 : 0, s.manifestJson, s.createdAt, s.updatedAt);
+        ).run(s.id, s.name, s.description ?? null, s.icon ?? null, s.kind, s.source, s.access,
+            s.tools !== undefined ? JSON.stringify(s.tools) : '[]',
+            s.enabled ? 1 : 0,
+            s.manifestJson ?? '{}',
+            s.createdAt, s.updatedAt);
     }
 
     get(id: string): Skill | null {
@@ -42,15 +46,20 @@ export class SkillsRepository {
         return this.#toEntity(row);
     }
 
+    list(): Skill[] {
+        const rows = this.#db.prepare('SELECT * FROM skills ORDER BY created_at DESC').all() as Record<string, unknown>[];
+        return rows.map(r => this.#toEntity(r));
+    }
+
     #toEntity(row: Record<string, unknown>): Skill {
         return {
             id: row.id as string, name: row.name as string,
             description: (row.description as string) ?? undefined,
             icon: (row.icon as string) ?? undefined,
             kind: row.kind as string, source: row.source as string, access: row.access as string,
-            tools: JSON.parse(row.tools as string),
-            enabled: (row.enabled as number) === 1,
-            manifestJson: row.manifest_json as string,
+            tools: row.tools ? JSON.parse(row.tools as string) : [],
+            enabled: (row.enabled as number | undefined) === 1,
+            manifestJson: row.manifest_json ? (row.manifest_json as string) : '{}',
             createdAt: row.created_at as number, updatedAt: row.updated_at as number,
         };
     }

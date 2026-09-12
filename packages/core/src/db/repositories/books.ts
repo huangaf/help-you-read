@@ -60,6 +60,11 @@ export class BooksRepository {
         this.#db.prepare('DELETE FROM books WHERE id = ?').run(id);
     }
 
+    list(): Book[] {
+        const rows = this.#db.prepare('SELECT * FROM books ORDER BY added_at DESC').all() as Record<string, unknown>[];
+        return rows.map(r => this.#toEntity(r));
+    }
+
     // entity-specific: 按标题查找
     getByTitle(title: string): Book[] {
         const rows = this.#db.prepare('SELECT * FROM books WHERE title = ?').all(title) as Record<string, unknown>[];
