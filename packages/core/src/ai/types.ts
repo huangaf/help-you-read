@@ -23,6 +23,13 @@ export interface AIChatResult {
     readonly usage?: TokenUsage | undefined;
 }
 
+export interface ChatStreamChunk {
+    readonly delta: string;
+    readonly final?: boolean | undefined;
+    readonly usage?: TokenUsage | undefined;
+    readonly citations?: RetrievalHit[] | undefined;
+}
+
 export interface ToolCall {
     readonly name: string;
     readonly args: unknown;

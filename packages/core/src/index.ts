@@ -21,7 +21,7 @@ export { ChunksRepository } from './db/repositories/chunks.js';
 export { ProvenanceRepository } from './db/repositories/vector_index_provenance.js';
 export type { Book, Annotation, Note, Thread, Message, Skill, ReadingSession, MethodArtifact, ReviewItem, Chunk, VectorIndexProvenance, SchemaMigration } from './db/types.js';
 export { AIProviderError, OpenAICompatibleProvider, TextChunker, HybridRetriever } from './ai/index.js';
-export type { AIConfig, ChatMessage, ChatRole, AIChatResult, ToolCall, TokenUsage, ToolSpec, ChatOpts, RetrievalHit, SearchContext, ChunkerOptions, ChunkResult } from './ai/index.js';
+export type { AIConfig, ChatMessage, ChatRole, AIChatResult, ChatStreamChunk, ToolCall, TokenUsage, ToolSpec, ChatOpts, RetrievalHit, SearchContext, ChunkerOptions, ChunkResult } from './ai/index.js';
 export { SkillManifestError, parseSkillManifest, SkillRuntime, CapabilityCatalog } from './skill/index.js';
 export type { ChatProvider as SkillChatProvider, SkillRuntimeOptions } from './skill/index.js';
 export type { SkillKind, AccessLevel, SkillManifest, CapabilityTool, SkillRunContext, SkillResult } from './skill/index.js';

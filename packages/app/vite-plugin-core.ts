@@ -60,6 +60,38 @@ export function coreApiPlugin(options: CoreServiceOptions): Plugin {
             };
 
             server.middlewares.use('/api/core', middleware);
+
+            // 注册 POST /api/chat/stream 中间件（SSE 流式对话；独立于 /api/core）
+            const chatStreamMiddleware: Middleware = async (req, res) => {
+                const chunks: Buffer[] = [];
+                for await (const chunk of req) {
+                    chunks.push(chunk as Buffer);
+                }
+                const params = JSON.parse(Buffer.concat(chunks).toString('utf-8')) as {
+                    threadId: string;
+                    bookId: string;
+                    userContent: string;
+                };
+
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+
+                try {
+                    const svc = getService();
+                    for await (const chunk of svc.chatStream(params)) {
+                        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                    }
+                    res.write('data: [DONE]\n\n');
+                    res.end();
+                } catch (e) {
+                    const message = e instanceof Error ? e.message : String(e);
+                    res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+                    res.end();
+                }
+            };
+
+            server.middlewares.use('/api/chat/stream', chatStreamMiddleware);
         },
 
         // dev server 关闭时清理 CoreService（释放 SQLite 连接）

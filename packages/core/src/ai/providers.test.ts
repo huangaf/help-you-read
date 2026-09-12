@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OpenAICompatibleProvider } from './providers.js';
-import type { AIConfig, ChatMessage } from './types.js';
+import type { AIConfig, ChatMessage, ChatStreamChunk } from './types.js';
 
 const mockConfig: AIConfig = {
     llmBaseUrl: 'http://mock-llm.test/v1',
@@ -125,5 +125,71 @@ describe('OpenAICompatibleProvider', () => {
 
         const body = JSON.parse(capturedCalls[0]!.body) as { tools: unknown[] };
         expect(body.tools).toHaveLength(1);
+    });
+
+    it('chatStream(): 解析 SSE 增量，产出 delta + final + usage', async () => {
+        const sse = [
+            'data: {"choices":[{"delta":{"content":"你"}}]}\n\n',
+            'data: {"choices":[{"delta":{"content":"好"}}]}\n\n',
+            'data: {"choices":[{"delta":{}}],"usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}}\n\n',
+            'data: [DONE]\n\n',
+        ].join('');
+
+        vi.stubGlobal('fetch', (async (): Promise<Response> => {
+            const stream = new ReadableStream<Uint8Array>({
+                start(controller) {
+                    controller.enqueue(new TextEncoder().encode(sse));
+                    controller.close();
+                },
+            });
+            return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+        }) as typeof fetch);
+
+        const chunks: ChatStreamChunk[] = [];
+        for await (const chunk of provider.chatStream([{ role: 'user', content: '你好' }])) {
+            chunks.push(chunk);
+        }
+
+        expect(chunks.map(c => c.delta).join('')).toBe('你好');
+        const final = chunks.find(c => c.final);
+        expect(final).toBeDefined();
+        expect(final!.usage?.promptTokens).toBe(5);
+        expect(final!.usage?.completionTokens).toBe(2);
+    });
+
+    it('chatStream(): 跨 chunk 边界正确重组（含多字节中文）', async () => {
+        const full = 'data: {"choices":[{"delta":{"content":"测试中文"}}]}\n\ndata: [DONE]\n\n';
+        const bytes = new TextEncoder().encode(full);
+        // 拆成 3 段，故意切断 UTF-8 多字节字符
+        const parts = [bytes.slice(0, 20), bytes.slice(20, 40), bytes.slice(40)];
+
+        vi.stubGlobal('fetch', (async (): Promise<Response> => {
+            const stream = new ReadableStream<Uint8Array>({
+                start(controller) {
+                    for (const p of parts) controller.enqueue(p);
+                    controller.close();
+                },
+            });
+            return new Response(stream, { status: 200 });
+        }) as typeof fetch);
+
+        const chunks: ChatStreamChunk[] = [];
+        for await (const chunk of provider.chatStream([{ role: 'user', content: 'x' }])) {
+            chunks.push(chunk);
+        }
+        expect(chunks.map(c => c.delta).join('')).toBe('测试中文');
+    });
+
+    it('chatStream(): API 错误 → 抛出类型化错误', async () => {
+        vi.stubGlobal('fetch', (async (): Promise<Response> =>
+            new Response(JSON.stringify({ error: { message: 'boom' } }), { status: 429 })
+        ) as typeof fetch);
+
+        const iterate = async (): Promise<void> => {
+            for await (const _ of provider.chatStream([{ role: 'user', content: 'x' }])) {
+                void _;
+            }
+        };
+        await expect(iterate()).rejects.toThrow(/API 错误 429/);
     });
 });

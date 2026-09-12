@@ -29,6 +29,8 @@ import {
 import type {
     AIConfig,
     ChatMessage,
+    ChatStreamChunk,
+    RetrievalHit,
     ReviewItem,
 } from '@hyr/core';
 
@@ -92,6 +94,7 @@ export class CoreService {
     #provenance: ProvenanceRepository;
 
     #aiProvider: OpenAICompatibleProvider;
+    #retriever: HybridRetriever;
     #catalog: CapabilityCatalog;
     #runtime: SkillRuntime;
     #ttsEngine: EspeakEngine;
@@ -120,8 +123,9 @@ export class CoreService {
         this.#chunks = new ChunksRepository(localHandle);
         this.#provenance = new ProvenanceRepository(localHandle);
 
-        // 3. AI Provider + ChatProvider 适配
+        // 3. AI Provider + ChatProvider 适配（检索器单例复用）
         this.#aiProvider = new OpenAICompatibleProvider(opts.aiConfig);
+        this.#retriever = new HybridRetriever(localHandle);
 
         // 4. SkillRuntime + CapabilityCatalog
         this.#catalog = new CapabilityCatalog();
@@ -167,18 +171,7 @@ export class CoreService {
                 const query = (a?.query as string) ?? '';
                 const bookId = (a?.bookId as string) ?? '';
 
-                // 使用 HybridRetriever 执行检索
-                const retriever = new HybridRetriever(this.#db.localDb!);
-
-                // 生成查询向量
-                const embeddings = await this.#aiProvider.embed([query]);
-                const queryVector = embeddings[0];
-
-                if (!queryVector) {
-                    return JSON.stringify({ hits: [], error: 'embedding 生成失败' });
-                }
-
-                const hits = await retriever.search({ query, bookId, queryVector });
+                const hits = await this.#retrieve(bookId, query);
                 return JSON.stringify({ hits });
             },
         });
@@ -354,6 +347,122 @@ export class CoreService {
     listMessages(threadId: string): Array<Record<string, unknown>> {
         const messages = this.#messages.findByThreadId(threadId);
         return messages.map(m => this.#toMessageJson(m));
+    }
+
+    // ============ AI 对话（RAG）============
+
+    async chat(params: { threadId: string; bookId: string; userContent: string }): Promise<{ content: string; citations?: RetrievalHit[] | undefined }> {
+        const hits = await this.#retrieve(params.bookId, params.userContent);
+        const messages = this.#buildChatMessages(params.threadId, params.userContent, hits);
+
+        const result = await this.#aiProvider.chat(messages);
+
+        const baseOrder = this.#nextPartsOrder(params.threadId);
+        const now = Date.now();
+        this.#messages.create({
+            id: `msg_${now}_${Math.random().toString(36).slice(2, 8)}`,
+            threadId: params.threadId,
+            role: 'user',
+            content: params.userContent,
+            citations: [],
+            toolCalls: [],
+            partsOrder: baseOrder,
+            createdAt: now,
+        });
+        this.#messages.create({
+            id: `msg_${now + 1}_${Math.random().toString(36).slice(2, 8)}`,
+            threadId: params.threadId,
+            role: 'assistant',
+            content: result.content,
+            citations: hits,
+            toolCalls: [],
+            partsOrder: baseOrder + 1,
+            createdAt: now + 1,
+        });
+
+        return hits.length > 0 ? { content: result.content, citations: hits } : { content: result.content };
+    }
+
+    async *chatStream(params: { threadId: string; bookId: string; userContent: string }): AsyncGenerator<ChatStreamChunk> {
+        const hits = await this.#retrieve(params.bookId, params.userContent);
+        const messages = this.#buildChatMessages(params.threadId, params.userContent, hits);
+
+        const baseOrder = this.#nextPartsOrder(params.threadId);
+        const userNow = Date.now();
+        this.#messages.create({
+            id: `msg_${userNow}_${Math.random().toString(36).slice(2, 8)}`,
+            threadId: params.threadId,
+            role: 'user',
+            content: params.userContent,
+            citations: [],
+            toolCalls: [],
+            partsOrder: baseOrder,
+            createdAt: userNow,
+        });
+
+        let full = '';
+        for await (const chunk of this.#aiProvider.chatStream(messages)) {
+            if (chunk.delta) full += chunk.delta;
+
+            if (chunk.final) {
+                const assistantNow = Date.now();
+                this.#messages.create({
+                    id: `msg_${assistantNow}_${Math.random().toString(36).slice(2, 8)}`,
+                    threadId: params.threadId,
+                    role: 'assistant',
+                    content: full,
+                    citations: hits,
+                    toolCalls: [],
+                    partsOrder: baseOrder + 1,
+                    createdAt: assistantNow,
+                });
+                yield {
+                    delta: '',
+                    final: true,
+                    ...(chunk.usage ? { usage: chunk.usage } : {}),
+                    ...(hits.length > 0 ? { citations: hits } : {}),
+                };
+                continue;
+            }
+
+            if (chunk.delta) yield { delta: chunk.delta };
+        }
+    }
+
+    async #retrieve(bookId: string, query: string): Promise<RetrievalHit[]> {
+        if (!query.trim() || !bookId) return [];
+        try {
+            const embeddings = await this.#aiProvider.embed([query]);
+            const queryVector = embeddings[0];
+            if (!queryVector) return [];
+            return await this.#retriever.search(query, { bookId }, queryVector);
+        } catch (e) {
+            console.error('RAG 检索失败:', e);
+            return [];
+        }
+    }
+
+    #buildChatMessages(threadId: string, userContent: string, hits: RetrievalHit[]): ChatMessage[] {
+        const context = hits.length > 0
+            ? `\n\n【相关原文片段】\n${hits.map(h => `(${h.source}) ${h.text}`).join('\n')}`
+            : '';
+
+        const messages: ChatMessage[] = [
+            { role: 'system', content: `你是电子书阅读助手。用户正在阅读一本书，请根据提供的原文片段与对话历史，简洁准确地回答。${context}` },
+        ];
+
+        for (const m of this.#messages.findByThreadId(threadId).slice(-10)) {
+            if (m.role === 'user' || m.role === 'assistant') {
+                messages.push({ role: m.role, content: m.content });
+            }
+        }
+
+        messages.push({ role: 'user', content: userContent });
+        return messages;
+    }
+
+    #nextPartsOrder(threadId: string): number {
+        return this.#messages.findByThreadId(threadId).reduce((max, m) => Math.max(max, m.partsOrder), -1) + 1;
     }
 
     // ============ Skills 操作 ============

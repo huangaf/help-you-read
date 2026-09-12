@@ -52,7 +52,7 @@ export default function AIChat({ coreClient, bookId, selectedText, currentCfi }:
         return () => { cancelled = true; };
     }, [coreClient, bookId]);
 
-    // 发送消息（浏览器直接调用 oMLX）
+    // 发送消息（经 CoreService：RAG 检索 + 流式回复 + 服务端持久化）
     const handleSend = async () => {
         if (!input.trim() || loading) return;
 
@@ -65,18 +65,27 @@ export default function AIChat({ coreClient, bookId, selectedText, currentCfi }:
                 ? `【选中文本】${selectedText}\n\n【问题】${input}`
                 : input;
 
-            // 保存用户消息到 DB
-            const userMsg = await coreClient.addMessage({ threadId, role: 'user', content: userContent });
-            setMessages(prev => [...prev, { id: userMsg.id as string, role: 'user', content: userContent }]);
-
-            // 直接调用 oMLX（浏览器侧，不经过 /api/core）
-            const aiResponse = await fetchAIChat(threadId, userContent);
-
-            // 保存 AI 回复到 DB
-            const aiMsg = await coreClient.addMessage({ threadId, role: 'assistant', content: aiResponse });
-            setMessages(prev => [...prev, { id: aiMsg.id as string, role: 'assistant', content: aiResponse }]);
-
+            // 乐观渲染用户消息（服务端会持久化）
+            setMessages(prev => [...prev, { id: `local_u_${Date.now()}`, role: 'user', content: userContent }]);
             setInput('');
+
+            // 流式接收 AI 回复
+            const assistantId = `local_a_${Date.now()}`;
+            let assistantText = '';
+            let started = false;
+            for await (const chunk of coreClient.chatStream({ threadId, bookId, userContent })) {
+                if (!chunk.delta) continue;
+                assistantText += chunk.delta;
+                if (!started) {
+                    started = true;
+                    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: assistantText }]);
+                } else {
+                    setMessages(prev => prev.map(m => (m.id === assistantId ? { ...m, content: assistantText } : m)));
+                }
+            }
+            if (!started) {
+                setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: assistantText }]);
+            }
         } catch (e) {
             console.error('AI 对话失败:', e);
             alert(`AI 调用失败: ${e instanceof Error ? e.message : String(e)}`);
@@ -131,29 +140,4 @@ export default function AIChat({ coreClient, bookId, selectedText, currentCfi }:
             )}
         </div>
     );
-}
-
-// oMLX 直接调用（浏览器侧）
-async function fetchAIChat(threadId: string, userContent: string): Promise<string> {
-    const res = await fetch('http://100.126.215.3:8090/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer REDACTED_API_KEY',
-        },
-        body: JSON.stringify({
-            model: 'Qwen3.6-35B-A3B-OptiQ-4bit',
-            messages: [
-                { role: 'system', content: `你是电子书阅读助手。用户正在阅读一本书，以下是当前上下文：\n【线程ID】${threadId}\n\n请根据用户问题提供简洁、有用的回答。` },
-                { role: 'user', content: userContent },
-            ],
-        }),
-    });
-
-    if (!res.ok) {
-        throw new Error(`oMLX API 错误: ${res.status}`);
-    }
-
-    const json = await res.json() as { choices: { message: { content: string } }[] };
-    return json.choices[0]?.message?.content ?? '';
 }

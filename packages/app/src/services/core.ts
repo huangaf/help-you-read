@@ -9,6 +9,14 @@ interface ApiResponse<T> {
     error?: string;
 }
 
+/** 流式对话增量块（SSE wire DTO，与 @hyr/core 的 ChatStreamChunk 结构对齐） */
+interface ChatStreamChunk {
+    delta: string;
+    final?: boolean;
+    usage?: { promptTokens: number; completionTokens: number };
+    citations?: unknown[];
+}
+
 /** Core API 客户端 — React 组件通过此类调用后端服务 */
 export class CoreClient {
     /**
@@ -152,9 +160,66 @@ export class CoreClient {
         return this.#call('scheduleReview', { reviewId, params });
     }
 
+    // ============ AI 对话（流式 SSE）============
+
+    async *chatStream(params: { threadId: string; bookId: string; userContent: string }): AsyncGenerator<ChatStreamChunk> {
+        const res = await fetch('/api/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+
+        if (!res.ok) {
+            throw new Error(`Chat stream HTTP 错误: ${res.status} ${res.statusText}`);
+        }
+        const body = res.body;
+        if (!body) throw new Error('Chat stream 缺少响应体');
+
+        const reader = body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        try {
+            for (;;) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                if (value) buffer += decoder.decode(value, { stream: true });
+
+                let idx: number;
+                while ((idx = buffer.indexOf('\n\n')) !== -1) {
+                    const frame = buffer.slice(0, idx);
+                    buffer = buffer.slice(idx + 2);
+                    const payload = extractSseData(frame);
+                    if (payload === undefined) continue;
+                    if (payload === '[DONE]') return;
+
+                    const parsed: unknown = JSON.parse(payload);
+                    if (isErrorFrame(parsed)) {
+                        throw new Error(`Chat stream 业务错误: ${parsed.error}`);
+                    }
+                    yield parsed as ChatStreamChunk;
+                }
+            }
+        } finally {
+            reader.releaseLock();
+        }
+    }
+
     // ============ 关闭（仅 Tauri 退出时调用）============
 
     close(): void {
         // v1: CoreService.close() 由 Vite plugin buildEnd 自动调用，此处无需操作
     }
+}
+
+/** 从 SSE 帧中提取 data: 负载（浏览器侧，与 core providers 的解析保持同构） */
+function extractSseData(frame: string): string | undefined {
+    for (const line of frame.split('\n')) {
+        if (line.startsWith('data:')) return line.slice(5).trim();
+    }
+    return undefined;
+}
+
+function isErrorFrame(raw: unknown): raw is { error: string } {
+    return typeof raw === 'object' && raw !== null
+        && typeof (raw as Record<string, unknown>).error === 'string';
 }
