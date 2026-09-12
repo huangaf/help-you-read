@@ -8,7 +8,7 @@
 
 import { writeFileSync } from "node:fs";
 import { createWriteStream, appendFileSync } from "node:fs";
-import { deflateSync } from "node:zlib";
+import { deflateRawSync } from "node:zlib";
 import { resolve } from "node:path";
 
 const BOOKS_DIR = resolve(import.meta.dirname, "..", "books");
@@ -35,7 +35,7 @@ function buildZip(files) {
 
 		const crc = computeCrc32(data);
 		const uncompressedSize = data.length;
-		const compressedData = isStored ? data : deflateSync(data);
+		const compressedData = isStored ? data : deflateRawSync(data);
 		const compressedSize = compressedData.length;
 
 		const dosTime = 0;
@@ -55,6 +55,7 @@ function buildZip(files) {
 		localHeader.writeUInt32LE(uncompressedSize, 22);
 		localHeader.writeUInt16LE(nameBuf.length, 26);
 		localHeader.writeUInt16LE(0, 28); // extra field length
+		nameBuf.copy(localHeader, 30); // 写入文件名（本地目录头尾部）
 
 		entries.push({
 			nameBuf,
