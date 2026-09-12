@@ -1,7 +1,7 @@
 // @hyr/engine — facade Engine.ts（骨架：六方法占位，T5 不实现逻辑）
 // T6-T11 在此骨架上实现各方法的具体逻辑
 
-import { BookHandle, EpubSource, RenderOpts, RenderedPage, TextItem, validateEpubSource, TextWalkFunc, TextWalkFilter, TransformFn } from './types.js';
+import { BookHandle, EpubSource, EngineSelection, RenderOpts, RenderedPage, TextItem, validateEpubSource, TextWalkFunc, TextWalkFilter, TransformFn } from './types.js';
 import { EngineNotReadyError, EpubLoadError, CfiError, TransformError, RenderError } from './errors.js';
 import { textWalker as nativeTextWalker } from '../foliate/text-walker.js';
 
@@ -101,6 +101,81 @@ export class Engine {
 
         this._ready = true;
         return handle;
+    }
+
+    /**
+     * init：初始化渲染管线，导航到起始位置（首个正文 section）。
+     * loadBook 后调用——renderer.open 仅登记元数据不加载 section，
+     * 须本方法触发首次导航，渲染器才会产出可渲染内容（render 的前置条件）。
+     * 未 loadBook → EngineNotReadyError。
+     */
+    async init(): Promise<void> {
+        if (!this._ready) {
+            throw new EngineNotReadyError();
+        }
+
+        const view = this.view;
+        if (!view) {
+            throw new EngineNotReadyError();
+        }
+
+        await view.init({ lastLocation: null, showTextStart: true });
+    }
+
+    /**
+     * onSelectionChange：订阅正文选区变化。
+     * foliate 将正文渲染在 iframe 中且不向宿主派发选区事件，故引擎直接在内容 document 上监听 selectionchange。
+     * 回调参数为选区（text + cfi），无选区时传 null。返回取消订阅函数。
+     * 未 loadBook → EngineNotReadyError。
+     */
+    onSelectionChange(cb: (selection: EngineSelection | null) => void): () => void {
+        if (!this._ready) {
+            throw new EngineNotReadyError();
+        }
+
+        const view = this.view;
+        if (!view) {
+            throw new EngineNotReadyError();
+        }
+
+        const renderer = this.getRenderer(view) as {
+            getContents(): Array<{ doc: Document }>;
+            addEventListener?(type: string, listener: () => void): void;
+            removeEventListener?(type: string, listener: () => void): void;
+        };
+
+        const listeners = new Map<Document, () => void>();
+
+        const emit = (doc: Document): void => {
+            const selection = doc.getSelection();
+            const text = selection?.toString().trim() ?? '';
+            if (!text) {
+                cb(null);
+                return;
+            }
+            cb({ text, cfi: view.lastLocation?.cfi ?? null });
+        };
+
+        const attach = (): void => {
+            for (const { doc } of renderer.getContents()) {
+                if (listeners.has(doc)) continue;
+                const handler = (): void => emit(doc);
+                doc.addEventListener('selectionchange', handler);
+                listeners.set(doc, handler);
+            }
+        };
+
+        attach();
+        const onLoad = (): void => attach();
+        renderer.addEventListener?.('load', onLoad);
+
+        return () => {
+            for (const [doc, handler] of listeners) {
+                doc.removeEventListener('selectionchange', handler);
+            }
+            listeners.clear();
+            renderer.removeEventListener?.('load', onLoad);
+        };
     }
 
     /**
