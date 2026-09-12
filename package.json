@@ -9,6 +9,7 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
+    "tsx": "^4.23.13",
     "typescript": "^5.8.0"
   },
   "engines": {
