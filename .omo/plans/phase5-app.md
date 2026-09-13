@@ -162,3 +162,33 @@ Reader 在 `loadBook` 后调用 `init()`，并轮询 `render()` 直至内容就�
 | tsc（engine/core/app） | 全 exit 0 |
 | build | exit 0 |
 | curl RAG 实测 | `indexBook` chunks=1 → `chat` citations=1（LLM 使用检索原文）→ `chatStream` final 含 citations（source=vector） |
+
+## 10. 可观测 + TTS 修复（第四轮）
+
+### 10.1 可观测（call_log）
+| 文件 | 变更 |
+|------|------|
+| `core/src/db/schema.ts` | local.db 迁移 v2：`call_log` 表（category/method/duration_ms/tokens/outcome/detail）+ 索引 |
+| `core/src/observability/call-log.ts` | `CallLogger`（`log` 写入 + `query` 过滤） |
+| `core/src/observability/call-log.test.ts` | 3 例 |
+| `app/core-service.ts` | chat / chatStream / runSkill / synthesize 四处埋点 |
+
+### 10.2 TTS 修复
+**问题**：`synthesize` 对 `AsyncIterable<AudioChunk>` 做 `await` → `audioPath` 恒 `undefined`（TTS 路径实际损坏）。
+
+| 文件 | 变更 |
+|------|------|
+| `app/core-service.ts` | 消费 `AsyncIterable` → 写 WAV 到 `<dataDir>/tts/` → 返回 `audioPath`；失败返回类型化错误 |
+| `app/vite-plugin-core.ts` | 新增 `/tts-audio` 静态服务（含目录穿越防护） |
+
+### 10.3 性能（NF4）
+| 指标 | 目标 | 实测 |
+|------|------|------|
+| 复习队列加载 | < 500ms | **9–15ms** |
+| 书库加载 | — | 10ms |
+| EPUB 首屏渲染 | < 2s | **346ms**（fixture；大书另测） |
+| AI 响应流式 | 流式 | ✅ SSE 增量到达 |
+
+### 10.4 验证（第四轮）
+core **167/167**（+3）；core/app tsc 0；E2E **6/6**；build 0；
+curl：`chat` → `call_log ai_chat/chat 4998ms success`；`synthesize` → `tts/synthesize error (TTS_NOT_INSTALLED)`。
