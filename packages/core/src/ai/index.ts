@@ -2,4 +2,6 @@ export { AIProviderError, OpenAICompatibleProvider } from './providers.js';
 export { TextChunker } from './chunker.js';
 export type { ChunkerOptions, ChunkResult } from './chunker.js';
 export { HybridRetriever } from './retrieval.js';
+export { BookIndexer } from './indexer.js';
+export type { EmbedFn, IndexMeta } from './indexer.js';
 export type { AIConfig, ChatMessage, ChatRole, AIChatResult, ChatStreamChunk, ToolCall, TokenUsage, ToolSpec, ChatOpts, RetrievalHit, SearchContext } from './types.js';

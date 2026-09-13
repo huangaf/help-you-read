@@ -162,6 +162,10 @@ export class CoreClient {
 
     // ============ AI 对话（流式 SSE）============
 
+    indexBook(bookId: string, text: string): Promise<{ chunks: number }> {
+        return this.#call('indexBook', { bookId, text });
+    }
+
     async *chatStream(params: { threadId: string; bookId: string; userContent: string }): AsyncGenerator<ChatStreamChunk> {
         const res = await fetch('/api/chat/stream', {
             method: 'POST',

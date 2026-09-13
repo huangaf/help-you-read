@@ -156,6 +156,10 @@ async function dispatchMethod(
         case 'listReviewItems': return svc.listReviewItems(p.bookId as string);
         case 'scheduleReview': return svc.scheduleReview(p.reviewId as string, p as { quality: number; learningSteps?: number[] });
 
+        // AI 对话 / RAG 索引
+        case 'chat': return await svc.chat(p as Parameters<typeof svc.chat>[0]);
+        case 'indexBook': return await svc.indexBook(p as Parameters<typeof svc.indexBook>[0]);
+
         default:
             throw new Error(`UNKNOWN_METHOD: 未知方法 "${method}"`);
     }

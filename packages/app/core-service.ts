@@ -19,6 +19,7 @@ import {
     OpenAICompatibleProvider,
     TextChunker,
     HybridRetriever,
+    BookIndexer,
     SkillRuntime,
     CapabilityCatalog,
     EspeakEngine,
@@ -94,7 +95,9 @@ export class CoreService {
     #provenance: ProvenanceRepository;
 
     #aiProvider: OpenAICompatibleProvider;
+    #aiConfig: AIConfig;
     #retriever: HybridRetriever;
+    #indexer: BookIndexer | null;
     #catalog: CapabilityCatalog;
     #runtime: SkillRuntime;
     #ttsEngine: EspeakEngine;
@@ -124,8 +127,15 @@ export class CoreService {
         this.#provenance = new ProvenanceRepository(localHandle);
 
         // 3. AI Provider + ChatProvider 适配（检索器单例复用）
+        this.#aiConfig = opts.aiConfig;
         this.#aiProvider = new OpenAICompatibleProvider(opts.aiConfig);
         this.#retriever = new HybridRetriever(localHandle);
+        this.#indexer = null;
+        try {
+            this.#indexer = new BookIndexer(localHandle);
+        } catch (e) {
+            console.error('sqlite-vec 加载失败（RAG 索引不可用）:', e);
+        }
 
         // 4. SkillRuntime + CapabilityCatalog
         this.#catalog = new CapabilityCatalog();
@@ -350,6 +360,21 @@ export class CoreService {
     }
 
     // ============ AI 对话（RAG）============
+
+    async indexBook(params: { bookId: string; text: string }): Promise<{ chunks: number }> {
+        if (!this.#indexer) throw new Error('VEC_UNAVAILABLE: sqlite-vec 扩展不可用');
+        const chunks = await this.#indexer.index(
+            params.bookId,
+            params.text,
+            (texts) => this.#aiProvider.embed(texts),
+            {
+                modelKind: 'api',
+                modelId: this.#aiConfig.embeddingModel,
+                endpoint: this.#aiConfig.embeddingBaseUrl,
+            },
+        );
+        return { chunks };
+    }
 
     async chat(params: { threadId: string; bookId: string; userContent: string }): Promise<{ content: string; citations?: RetrievalHit[] | undefined }> {
         const hits = await this.#retrieve(params.bookId, params.userContent);
