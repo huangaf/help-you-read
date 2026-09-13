@@ -192,3 +192,34 @@ Reader 在 `loadBook` 后调用 `init()`，并轮询 `render()` 直至内容就�
 ### 10.4 验证（第四轮）
 core **167/167**（+3）；core/app tsc 0；E2E **6/6**；build 0；
 curl：`chat` → `call_log ai_chat/chat 4998ms success`；`synthesize` → `tts/synthesize error (TTS_NOT_INSTALLED)`。
+
+## 11. 第五轮：TTS 修复 + 自动索引 UX + 语料扩充
+
+### 11.1 TTS `--stdout` 修复
+**问题**：`espeak-ng -v cmn -s 175 -- <text>` 无 `--stdout` 时走音频设备播放，stdout 为 0 字节 → `TTS_NO_AUDIO`。
+
+| 文件 | 变更 |
+|------|------|
+| `core/src/tts/espeak.ts` | args 补 `--stdout` |
+| `core/src/tts/espeak.test.ts` | S6 断言 `--stdout` 存在 |
+
+**实测**：synthesize → WAV 133900 字节（RIFF PCM 16bit mono 22050Hz）；`/tts-audio` HTTP 200 `audio/wav`。
+
+### 11.2 自动索引 UX
+**问题**：`indexBook` 需显式调用，RAG 无内容可检索。
+
+| 文件 | 变更 |
+|------|------|
+| `engine/src/facade/Engine.ts` | 新增 `extractText()`（遍历 spine，`section.createDocument()` 解析各章，不改阅读位置） |
+| `engine/src/facade/extractText.test.ts` | 2 例 |
+| `app/src/pages/Reader.tsx` | 加载后**后台**提取全文 → `indexBook`；工具栏显示索引状态 |
+| `app/tests/e2e.spec.ts` | S9 改为验证自动索引 |
+
+**实测**：认知觉醒（1.2MB 真实 EPUB）→ 首屏 384ms + 后台索引 **326 段**（11.3s，不阻塞阅读）。
+
+### 11.3 语料扩充
+`books/` 新增 5 本真实 EPUB（围城 / 小王子三部曲 / 第一性原理×2 / 认知觉醒），均 `unzip -t` 有效；
+合计 6 本真实书 + 2 个合成 fixture。**注**：新增书籍未纳入 git（版权 + 体积），保留为本地回归语料。
+
+### 11.4 验证（第五轮）
+engine **66/66**（+2）；core **167/167**；app tsc 0；E2E **6/6**；build 0。
