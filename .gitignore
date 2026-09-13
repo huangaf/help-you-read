@@ -17,3 +17,6 @@ packages/engine/src/**/__screenshots__/
 
 # 测试语料（EPUB fixture，体积大；合成 fixture 由脚本重建，真实 EPUB 需自备）
 packages/engine/public/books/
+
+# 书籍语料（真实 EPUB 版权/体积；合成 fixture 由 scripts/make-fixture.mjs 重建）
+books/
