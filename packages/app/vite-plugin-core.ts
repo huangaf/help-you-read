@@ -3,6 +3,7 @@
 
 import type { Plugin } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { CoreService, type CoreServiceOptions } from './core-service.js';
 
 /** 中间件函数签名（Connect 风格，避免依赖 connect 包） */
@@ -92,6 +93,21 @@ export function coreApiPlugin(options: CoreServiceOptions): Plugin {
             };
 
             server.middlewares.use('/api/chat/stream', chatStreamMiddleware);
+
+            // 静态服务 TTS 音频（/tts-audio/<file> → <dataDir>/tts/<file>）
+            server.middlewares.use('/tts-audio', (req, res) => {
+                const raw = (req.url ?? '').replace(/^\//, '').split('?')[0] ?? '';
+                const safe = raw.replace(/[^a-zA-Z0-9._-]/g, '');
+                if (!safe) { res.statusCode = 400; res.end(); return; }
+                try {
+                    const data = readFileSync(`${options.dataDir}/tts/${safe}`);
+                    res.setHeader('Content-Type', 'audio/wav');
+                    res.end(data);
+                } catch {
+                    res.statusCode = 404;
+                    res.end();
+                }
+            });
         },
 
         // dev server 关闭时清理 CoreService（释放 SQLite 连接）

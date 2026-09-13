@@ -100,6 +100,18 @@ CREATE TABLE IF NOT EXISTS vector_index_provenance(
 );
 `,
     },
+    {
+        version: 2,
+        description: 'v1.3 — local.db 增加 call_log 表（AI/skill/TTS 调用可观测）',
+        sql: `
+CREATE TABLE IF NOT EXISTS call_log(
+  id TEXT PRIMARY KEY, ts INTEGER NOT NULL, category TEXT NOT NULL, method TEXT NOT NULL,
+  duration_ms INTEGER NOT NULL, input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+  outcome TEXT NOT NULL, detail TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_call_log_ts ON call_log(ts);
+`,
+    },
 ];
 
 // schema_migrations 表（双库各一份）

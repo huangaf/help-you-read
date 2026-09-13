@@ -32,3 +32,5 @@ export { supermemoCardGen } from './skill/presets/supermemo_card_gen.js';
 export type { Voice, AudioChunk, TTSEngine } from './tts/types.js';
 export { TTSEngineError, EspeakEngine, type SynthesizeOpts } from './tts/espeak.js';
 export { sm2Schedule, type SM2Input, type SM2Result } from './supermemo/sm2.js';
+export { CallLogger } from './observability/call-log.js';
+export type { CallCategory, CallLogEntry, CallLogRow, CallLogQuery } from './observability/call-log.js';

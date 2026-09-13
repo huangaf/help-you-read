@@ -2,6 +2,8 @@
 // 职责：双库 + 迁移 + repos + AIProvider(适配 ChatProvider) + SkillRuntime/CapabilityCatalog + EspeakEngine
 // 浏览器不可直接 import（依赖 node:sqlite / child_process），通过 Vite 插件暴露 HTTP API
 
+import { mkdirSync, writeFileSync } from 'node:fs';
+
 import {
     Database,
     migrateAll,
@@ -23,6 +25,7 @@ import {
     SkillRuntime,
     CapabilityCatalog,
     EspeakEngine,
+    CallLogger,
     parseSkillManifest,
     sm2Schedule,
 } from '@hyr/core';
@@ -101,6 +104,8 @@ export class CoreService {
     #catalog: CapabilityCatalog;
     #runtime: SkillRuntime;
     #ttsEngine: EspeakEngine;
+    #callLogger: CallLogger;
+    #dataDir: string;
 
     constructor(opts: CoreServiceOptions) {
         // 1. 双库初始化 + 迁移
@@ -145,7 +150,11 @@ export class CoreService {
         // 5. TTS Engine
         this.#ttsEngine = new EspeakEngine();
 
-        // 6. 注册内置工具（execute 回调）
+        // 6. 可观测（local.db call_log）
+        this.#callLogger = new CallLogger(localHandle);
+        this.#dataDir = opts.dataDir;
+
+        // 7. 注册内置工具（execute 回调）
         this.#registerBuiltinTools();
     }
 
@@ -377,38 +386,54 @@ export class CoreService {
     }
 
     async chat(params: { threadId: string; bookId: string; userContent: string }): Promise<{ content: string; citations?: RetrievalHit[] | undefined }> {
-        const hits = await this.#retrieve(params.bookId, params.userContent);
-        const messages = this.#buildChatMessages(params.threadId, params.userContent, hits);
+        const started = Date.now();
+        try {
+            const hits = await this.#retrieve(params.bookId, params.userContent);
+            const messages = this.#buildChatMessages(params.threadId, params.userContent, hits);
 
-        const result = await this.#aiProvider.chat(messages);
+            const result = await this.#aiProvider.chat(messages);
 
-        const baseOrder = this.#nextPartsOrder(params.threadId);
-        const now = Date.now();
-        this.#messages.create({
-            id: `msg_${now}_${Math.random().toString(36).slice(2, 8)}`,
-            threadId: params.threadId,
-            role: 'user',
-            content: params.userContent,
-            citations: [],
-            toolCalls: [],
-            partsOrder: baseOrder,
-            createdAt: now,
-        });
-        this.#messages.create({
-            id: `msg_${now + 1}_${Math.random().toString(36).slice(2, 8)}`,
-            threadId: params.threadId,
-            role: 'assistant',
-            content: result.content,
-            citations: hits,
-            toolCalls: [],
-            partsOrder: baseOrder + 1,
-            createdAt: now + 1,
-        });
+            const baseOrder = this.#nextPartsOrder(params.threadId);
+            const now = Date.now();
+            this.#messages.create({
+                id: `msg_${now}_${Math.random().toString(36).slice(2, 8)}`,
+                threadId: params.threadId,
+                role: 'user',
+                content: params.userContent,
+                citations: [],
+                toolCalls: [],
+                partsOrder: baseOrder,
+                createdAt: now,
+            });
+            this.#messages.create({
+                id: `msg_${now + 1}_${Math.random().toString(36).slice(2, 8)}`,
+                threadId: params.threadId,
+                role: 'assistant',
+                content: result.content,
+                citations: hits,
+                toolCalls: [],
+                partsOrder: baseOrder + 1,
+                createdAt: now + 1,
+            });
 
-        return hits.length > 0 ? { content: result.content, citations: hits } : { content: result.content };
+            this.#callLogger.log({
+                category: 'ai_chat',
+                method: 'chat',
+                durationMs: Date.now() - started,
+                inputTokens: result.usage?.promptTokens,
+                outputTokens: result.usage?.completionTokens,
+                outcome: 'success',
+            });
+
+            return hits.length > 0 ? { content: result.content, citations: hits } : { content: result.content };
+        } catch (e) {
+            this.#callLogger.log({ category: 'ai_chat', method: 'chat', durationMs: Date.now() - started, outcome: 'error', detail: { message: e instanceof Error ? e.message : String(e) } });
+            throw e;
+        }
     }
 
     async *chatStream(params: { threadId: string; bookId: string; userContent: string }): AsyncGenerator<ChatStreamChunk> {
+        const started = Date.now();
         const hits = await this.#retrieve(params.bookId, params.userContent);
         const messages = this.#buildChatMessages(params.threadId, params.userContent, hits);
 
@@ -452,6 +477,8 @@ export class CoreService {
 
             if (chunk.delta) yield { delta: chunk.delta };
         }
+
+        this.#callLogger.log({ category: 'ai_chat', method: 'chatStream', durationMs: Date.now() - started, outcome: 'success' });
     }
 
     async #retrieve(bookId: string, query: string): Promise<RetrievalHit[]> {
@@ -524,6 +551,7 @@ export class CoreService {
     }
 
     runSkill(params: { skillId: string; bookId?: string; selectedText?: string; cfi?: string; args?: Record<string, unknown> }): Promise<Record<string, unknown>> {
+        const started = Date.now();
         const ctx = {
             skillId: params.skillId,
             bookId: params.bookId,
@@ -535,17 +563,46 @@ export class CoreService {
         // 从 catalog 获取 manifest
         const manifest = this.#catalog.resolve(params.skillId);
         if (!manifest) {
+            this.#callLogger.log({ category: 'skill_run', method: params.skillId, durationMs: Date.now() - started, outcome: 'SKILL_NOT_FOUND' });
             return Promise.resolve({ ok: false, error: `SKILL_NOT_FOUND: ${params.skillId}` });
         }
 
-        return this.#runtime.run(manifest, ctx).then(result => ({ ok: result.ok, data: result.data, error: result.error }));
+        return this.#runtime.run(manifest, ctx)
+            .then(result => {
+                this.#callLogger.log({ category: 'skill_run', method: params.skillId, durationMs: Date.now() - started, outcome: result.ok ? 'success' : 'error' });
+                return { ok: result.ok, data: result.data, error: result.error };
+            })
+            .catch((e: unknown) => {
+                this.#callLogger.log({ category: 'skill_run', method: params.skillId, durationMs: Date.now() - started, outcome: 'error', detail: { message: e instanceof Error ? e.message : String(e) } });
+                throw e;
+            });
     }
 
     // ============ TTS 操作 ============
 
     async synthesize(text: string, options?: { voice?: string; speed?: number }): Promise<Record<string, unknown>> {
-        const result = await this.#ttsEngine.synthesize(text, options);
-        return { audioPath: result.audioPath, duration: result.duration };
+        const started = Date.now();
+        try {
+            const ttsDir = `${this.#dataDir}/tts`;
+            mkdirSync(ttsDir, { recursive: true });
+
+            const parts: Uint8Array[] = [];
+            const opts = options?.speed !== undefined ? { speed: options.speed } : undefined;
+            for await (const chunk of this.#ttsEngine.synthesize(text, options?.voice, opts)) {
+                parts.push(new Uint8Array(chunk.data));
+            }
+            if (parts.length === 0) throw new Error('TTS_NO_AUDIO: 未产生音频');
+
+            const id = `tts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.wav`;
+            const filePath = `${ttsDir}/${id}`;
+            writeFileSync(filePath, Buffer.concat(parts));
+
+            this.#callLogger.log({ category: 'tts', method: 'synthesize', durationMs: Date.now() - started, outcome: 'success' });
+            return { audioPath: filePath };
+        } catch (e) {
+            this.#callLogger.log({ category: 'tts', method: 'synthesize', durationMs: Date.now() - started, outcome: 'error', detail: { message: e instanceof Error ? e.message : String(e) } });
+            throw e;
+        }
     }
 
     // ============ Review 操作（SuperMemo）============
