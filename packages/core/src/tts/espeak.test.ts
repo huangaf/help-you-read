@@ -143,4 +143,28 @@ describe('tts/espeak', () => {
     controller.abort();
     await expect(iter.next()).rejects.toThrow(TTSEngineError);
   });
+
+  it('S6: synthesize() 传 --stdout（否则 espeak-ng 播放音频而非输出 WAV）', async () => {
+    const capturedArgs: string[] = [];
+    mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+      capturedArgs.push(...args);
+      const { Readable } = require('stream');
+      const stream = new Readable({ read() {} });
+      process.nextTick(() => { stream.push(null); });
+      const child = {
+        stdout: stream,
+        stdin: { write: (_d: string) => {}, end: () => {} },
+        on: (event: string, handler: (...args: unknown[]) => void) => {
+          if (event === 'close') stream.on('end', () => handler(0));
+          return child;
+        },
+        kill: () => { stream.destroy(); },
+      };
+      return child;
+    });
+
+    const engine = new EspeakEngine();
+    for await (const _ of engine.synthesize('你好')) { void _; }
+    expect(capturedArgs).toContain('--stdout');
+  });
 });

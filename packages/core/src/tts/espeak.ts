@@ -104,7 +104,7 @@ export class EspeakEngine implements TTSEngine {
                 return new Promise<IteratorResult<AudioChunk>>((resolve, reject) => {
                     let child;
                     try {
-                        const args = ['-v', voice, '-s', String(speed), '--', text];
+                        const args = ['-v', voice, '-s', String(speed), '--stdout', '--', text];
                         child = spawn('espeak-ng', args);
                     } catch (e: unknown) {
                         reject(new TTSEngineError('TTS_SPAWN_FAILED', e instanceof Error ? e.message : String(e)));
