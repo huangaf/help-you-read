@@ -214,4 +214,52 @@ test.describe('Phase 5 E2E: v1 最小闭环', () => {
         const cards = reviewBody.data as Array<{ question: string }>;
         expect(cards.some(c => c.question.includes('E2E 应用内容'))).toBe(true);
     });
+
+    // S9: AI 对话全链路（索引 → RAG 检索 → SSE 流式回复）
+    test('S9: AI 对话 RAG 流式', async ({ page }) => {
+        test.setTimeout(150_000);
+        await page.goto(BASE_URL);
+
+        // 导入 EPUB（建立 book + thread）
+        const importBtn = page.locator('button:has-text("导入 EPUB")');
+        await expect(importBtn).toBeVisible({ timeout: 10_000 });
+        const [fileChooser] = await Promise.all([
+            page.waitForEvent('filechooser'),
+            importBtn.click(),
+        ]);
+        await fileChooser.setFiles(EPUB_PATH);
+        await expect(page.locator('div[style*="pre-wrap"]')).toBeVisible({ timeout: 30_000 });
+
+        // 索引正文（RAG 前置）
+        const indexRes = await page.request.post(API_URL, {
+            headers: { 'Content-Type': 'application/json' },
+            data: {
+                method: 'indexBook',
+                params: {
+                    bookId: BOOK_ID,
+                    text: '第一章：可见内容。投资哲学强调长期价值与安全边际。芒格主张逆向思维与多元思维模型。',
+                },
+            },
+        });
+        const indexBody = await indexRes.json();
+        expect(indexBody.ok).toBe(true);
+        expect((indexBody.data as { chunks: number }).chunks).toBeGreaterThan(0);
+
+        // 切到 AI 对话 tab，记录既有 AI 消息数（DB 持久，含历史）
+        await page.locator('button:has-text("AI 对话")').click();
+        const rightPanel = page.locator('aside').nth(1);
+        const aiLabel = rightPanel.locator('strong:has-text("AI:")');
+        await page.waitForTimeout(800);
+        const before = await aiLabel.count();
+
+        // 发送问题
+        await rightPanel.locator('input[placeholder="输入问题…"]').fill('投资哲学强调什么');
+        await rightPanel.locator('button:has-text("发送")').click();
+
+        // 等待新增一条 assistant 流式回复（真实 LLM，慢）
+        await expect(aiLabel).toHaveCount(before + 1, { timeout: 120_000 });
+        const bubble = rightPanel.locator('div:has(> strong:text-is("AI:"))').last();
+        const text = await bubble.textContent();
+        expect((text ?? '').length).toBeGreaterThan(3);
+    });
 });
