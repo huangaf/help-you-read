@@ -123,6 +123,36 @@ export class Engine {
     }
 
     /**
+     * extractText：提取全书纯文本（遍历 spine 各 section，供 RAG 索引）。
+     * 使用 section.createDocument() 解析各章 HTML，不改变当前阅读位置。
+     * 未 loadBook → EngineNotReadyError。
+     */
+    async extractText(): Promise<string> {
+        if (!this._ready) {
+            throw new EngineNotReadyError();
+        }
+
+        const view = this.view;
+        if (!view) {
+            throw new EngineNotReadyError();
+        }
+
+        const sections = (view.book?.sections ?? []) as Array<{ createDocument?: () => Promise<Document> }>;
+        const parts: string[] = [];
+        for (const section of sections) {
+            if (typeof section.createDocument !== 'function') continue;
+            try {
+                const doc = await section.createDocument();
+                const text = doc.body?.textContent?.trim() ?? '';
+                if (text) parts.push(text);
+            } catch (e) {
+                console.warn('extractText: section 解析失败', e);
+            }
+        }
+        return parts.join('\n\n');
+    }
+
+    /**
      * onSelectionChange：订阅正文选区变化。
      * foliate 将正文渲染在 iframe 中且不向宿主派发选区事件，故引擎直接在内容 document 上监听 selectionchange。
      * 回调参数为选区（text + cfi），无选区时传 null。返回取消订阅函数。

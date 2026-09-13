@@ -41,6 +41,7 @@ export default function Reader({ coreClient, bookId, currentCfi, onCfiChange, on
     const [error, setError] = useState<string | null>(null);
     const [pageText, setPageText] = useState<string>('');
     const [bookTitle, setBookTitle] = useState('');
+    const [indexStatus, setIndexStatus] = useState('');
 
     // 加载 EPUB（Engine.loadBook）
     useEffect(() => {
@@ -110,6 +111,20 @@ export default function Reader({ coreClient, bookId, currentCfi, onCfiChange, on
                     onSelectText(selection?.text ?? null, selection?.cfi ?? undefined);
                 });
                 unsubscribeSelectionRef.current = unsubscribe;
+
+                // 自动索引（RAG 前置）：后台提取全书文本 → indexBook，不阻塞阅读
+                setIndexStatus('索引中…');
+                void (async () => {
+                    try {
+                        const fullText = await engine.extractText();
+                        if (cancelled || !fullText.trim()) { if (!cancelled) setIndexStatus(''); return; }
+                        const res = await coreClient.indexBook(bookId, fullText);
+                        if (!cancelled) setIndexStatus(`已索引 ${res.chunks} 段`);
+                    } catch (e) {
+                        if (!cancelled) setIndexStatus('索引失败');
+                        console.warn('自动索引失败:', e);
+                    }
+                })();
             } catch (e) {
                 if (!cancelled) {
                     setError(e instanceof Error ? e.message : String(e));
@@ -183,7 +198,10 @@ export default function Reader({ coreClient, bookId, currentCfi, onCfiChange, on
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* 工具栏 */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
-                <span style={{ fontSize: '13px', color: '#666' }}>{bookTitle}</span>
+                <span style={{ fontSize: '13px', color: '#666' }}>
+                    {bookTitle}
+                    {indexStatus && <small style={{ color: '#999', marginLeft: '8px' }}>{indexStatus}</small>}
+                </span>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={handlePrev} disabled={loading}>◀ 上一页</button>
                     <button onClick={handleNext} disabled={loading}>下一页 ▶</button>

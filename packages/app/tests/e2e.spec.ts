@@ -230,20 +230,8 @@ test.describe('Phase 5 E2E: v1 最小闭环', () => {
         await fileChooser.setFiles(EPUB_PATH);
         await expect(page.locator('div[style*="pre-wrap"]')).toBeVisible({ timeout: 30_000 });
 
-        // 索引正文（RAG 前置）
-        const indexRes = await page.request.post(API_URL, {
-            headers: { 'Content-Type': 'application/json' },
-            data: {
-                method: 'indexBook',
-                params: {
-                    bookId: BOOK_ID,
-                    text: '第一章：可见内容。投资哲学强调长期价值与安全边际。芒格主张逆向思维与多元思维模型。',
-                },
-            },
-        });
-        const indexBody = await indexRes.json();
-        expect(indexBody.ok).toBe(true);
-        expect((indexBody.data as { chunks: number }).chunks).toBeGreaterThan(0);
+        // 等待自动索引完成（Reader 加载后自动触发 RAG 索引）
+        await expect(page.locator('text=/已索引 \\d+ 段/')).toBeVisible({ timeout: 30_000 });
 
         // 切到 AI 对话 tab，记录既有 AI 消息数（DB 持久，含历史）
         await page.locator('button:has-text("AI 对话")').click();
@@ -253,7 +241,7 @@ test.describe('Phase 5 E2E: v1 最小闭环', () => {
         const before = await aiLabel.count();
 
         // 发送问题
-        await rightPanel.locator('input[placeholder="输入问题…"]').fill('投资哲学强调什么');
+        await rightPanel.locator('input[placeholder="输入问题…"]').fill('第一章讲了什么');
         await rightPanel.locator('button:has-text("发送")').click();
 
         // 等待新增一条 assistant 流式回复（真实 LLM，慢）
