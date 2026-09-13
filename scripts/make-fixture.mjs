@@ -6,12 +6,14 @@
 // 完全使用 Node.js built-in（zlib + fs），不依赖任何外部库。
 // ZIP 格式：手动构建，确保 mimetype STORED + 首位。
 
-import { writeFileSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { createWriteStream, appendFileSync } from "node:fs";
 import { deflateRawSync } from "node:zlib";
 import { resolve } from "node:path";
 
 const BOOKS_DIR = resolve(import.meta.dirname, "..", "books");
+// 引擎测试通过 Vite publicDir 访问 /books/（packages/engine/public/books/）
+const ENGINE_BOOKS_DIR = resolve(import.meta.dirname, "..", "packages", "engine", "public", "books");
 
 // ──────────────── ZIP 构建器（手搓，不依赖外部库） ────────────────
 
@@ -384,45 +386,93 @@ function generateNavHiddenEpub() {
 	return buildZip(files);
 }
 
+// ──────────────── EPUB 3: reflow（多章节，供 reflow/分页/re-layout 测试） ────────────────
+
+function generateReflowEpub() {
+	const chapterCount = 8;
+	const title = "重排测试书";
+
+	const manifestItems = [];
+	const spineItems = [];
+	for (let i = 1; i <= chapterCount; i++) {
+		manifestItems.push(`    <item id="chapter${i}" href="chapter${i}.xhtml" media-type="application/xhtml+xml"/>`);
+		spineItems.push(`    <itemref idref="chapter${i}"/>`);
+	}
+
+	const opf = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uid" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:identifier id="uid">urn:uuid:reflow-001</dc:identifier>
+    <dc:title>${title}</dc:title>
+    <dc:language>zh-CN</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="style" href="styles.css" media-type="text/css"/>
+${manifestItems.join("\n")}
+  </manifest>
+  <spine toc="nav">
+${spineItems.join("\n")}
+  </spine>
+</package>`;
+
+	const files = [
+		{ name: "mimetype", data: Buffer.from("application/epub+zip"), stored: true },
+		{ name: "META-INF/container.xml", data: Buffer.from(`<?xml version="1.0" encoding="utf-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`), stored: false },
+		{ name: "content.opf", data: Buffer.from(opf), stored: false },
+		{ name: "nav.xhtml", data: Buffer.from(navDocument()), stored: false },
+		{ name: "styles.css", data: Buffer.from(`body { font-family: serif; line-height: 1.6; }
+p { text-indent: 2em; margin-bottom: 0.5em; }`), stored: false },
+	];
+
+	for (let i = 1; i <= chapterCount; i++) {
+		const paragraphs = Array.from({ length: 12 }, (_, j) =>
+			`  <p>这是第${i}章的第${j + 1}段测试文本，用于验证 reflow 渲染与分页布局。段落需要足够长度以产生多页内容，确保 re-layout 路径被覆盖。</p>`).join("\n");
+		const body = `\n  <h1>第${i}章 重排测试</h1>\n${paragraphs}\n`;
+		files.push({ name: `chapter${i}.xhtml`, data: Buffer.from(xhtmlPage(`第${i}章`, body)), stored: false });
+	}
+
+	return buildZip(files);
+}
+
 // ──────────────── 主入口 ────────────────
 
 async function main() {
 	console.log("📦 生成合成 EPUB fixtures...\n");
 
-	// 1. fixed-layout
-	const fixedLayoutPath = resolve(BOOKS_DIR, "fixture-fixed-layout.epub");
+	const targets = [BOOKS_DIR, ENGINE_BOOKS_DIR];
+	for (const dir of targets) mkdirSync(dir, { recursive: true });
 
-	console.log("  → fixture-fixed-layout.epub（富 CSS：@font-face、background-image、多列）");
+	const fixtures = [
+		{ file: "fixture-fixed-layout.epub", label: "富 CSS：@font-face、background-image、多列", gen: generateFixedLayoutEpub },
+		{ file: "fixture-nav-hidden.epub", label: "隐藏文本：display:none、visibility:hidden", gen: generateNavHiddenEpub },
+		{ file: "fixture-reflow.epub", label: "多章节 reflow（分页 / re-layout 测试）", gen: generateReflowEpub },
+	];
 
-	try {
-		const fixedLayoutData = generateFixedLayoutEpub();
+	for (const { file, label, gen } of fixtures) {
+		console.log(`  → ${file}（${label}）`);
+		try {
+			const data = gen();
+			for (const dir of targets) {
+				const outPath = resolve(dir, file);
 
-		writeFileSync(fixedLayoutPath, fixedLayoutData);
-		console.log(`    ✓ 已写入 ${fixedLayoutPath}（${fixedLayoutData.length} bytes）`);
-	} catch (err) {
-		console.error(`  ✗ fixed-layout 生成失败: ${err.message}`);
+				writeFileSync(outPath, data);
+				console.log(`    ✓ ${outPath}（${data.length} bytes）`);
+			}
+		} catch (err) {
+			console.error(`  ✗ ${file} 生成失败: ${err.message}`);
 
-		process.exit(1);
-	}
-
-	// 2. nav-hidden
-	const navHiddenPath = resolve(BOOKS_DIR, "fixture-nav-hidden.epub");
-
-	console.log("  → fixture-nav-hidden.epub（隐藏文本：display:none、visibility:hidden）");
-
-	try {
-		const navHiddenData = generateNavHiddenEpub();
-
-		writeFileSync(navHiddenPath, navHiddenData);
-		console.log(`    ✓ 已写入 ${navHiddenPath}（${navHiddenData.length} bytes）`);
-	} catch (err) {
-		console.error(`  ✗ nav-hidden 生成失败: ${err.message}`);
-
-		process.exit(1);
+			process.exit(1);
+		}
 	}
 
 	console.log("\n✅ 全部生成完成！");
-	console.log(`   文件位置: ${BOOKS_DIR}/`);
+	console.log(`   输出目录: ${BOOKS_DIR}/ + ${ENGINE_BOOKS_DIR}/`);
 }
 
 main().catch((err) => {

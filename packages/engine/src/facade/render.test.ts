@@ -39,8 +39,8 @@ describe('render（T10：re-layout + RenderedPage）', () => {
 
     beforeAll(async () => {
         engine = new Engine();
-        // 使用真实重排 EPUB（毛泽东选集）测试 reflow render 路径
-        const file = await loadEpubFile('毛泽东选集一至七卷 (毛泽东) (Z-Library).epub');
+        // 使用合成重排 EPUB（多章节）测试 reflow render 路径
+        const file = await loadEpubFile('fixture-reflow.epub');
         await engine.loadBook({ type: 'data', data: file });
 
         // 导航到首页，确保有内容可渲染

@@ -32,18 +32,18 @@ describe('loadBook (GREEN)', () => {
         return new File([buf], name, { type: 'application/epub+zip' });
     }
 
-    it('loadBook(EPUB data) → BookHandle.metadata.title 含「毛泽东」', async () => {
-        const file = await loadEpubFile('毛泽东选集一至七卷 (毛泽东) (Z-Library).epub');
+    it('loadBook(EPUB data) → BookHandle.metadata.title 含「重排测试书」', async () => {
+        const file = await loadEpubFile('fixture-reflow.epub');
         const engine = new Engine();
         const handle = await engine.loadBook({ type: 'data', data: file });
 
         expect(handle).toBeDefined();
         expect(typeof handle.metadata.title).toBe('string');
-        expect(handle.metadata.title).toContain('毛泽东');
+        expect(handle.metadata.title).toContain('重排测试书');
     });
 
     it('loadBook(EPUB data) → sections.length > 0', async () => {
-        const file = await loadEpubFile('毛泽东选集一至七卷 (毛泽东) (Z-Library).epub');
+        const file = await loadEpubFile('fixture-reflow.epub');
         const engine = new Engine();
         const handle = await engine.loadBook({ type: 'data', data: file });
 

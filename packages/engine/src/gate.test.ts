@@ -30,9 +30,9 @@ if (!customElements.get('foliate-view')) {
 // 门控 fixtures：3 EPUB 覆盖不同格式
 const FIXTURES = [
 	{
-		name: '毛泽东选集一至七卷 (毛泽东) (Z-Library).epub',
-		expectedTitleContains: '毛泽东',
-		description: 'EPUB2/NCX（真实 NCX 目录，428 条目）',
+		name: 'fixture-reflow.epub',
+		expectedTitleContains: '重排测试书',
+		description: 'EPUB3/NAV 多章节 reflow（8 章，re-layout 路径）',
 	},
 	{
 		name: 'fixture-fixed-layout.epub',
