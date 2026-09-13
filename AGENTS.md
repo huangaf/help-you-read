@@ -55,7 +55,7 @@ packages/
 ## 8. 测试约定（TDD）
 - **MUST**：先写失败测试，再实现（superpowers TDD 纪律）
 - vitest 单测 + Playwright e2e
-- EPUB 回归语料：`books/*.epub`（含芒格）+ 合成 EPUB fixture（含 NAV / 隐藏文本）
+- EPUB 回归语料：`books/*.epub`（**不入库**；合成 fixture 由 `node scripts/make-fixture.mjs` 重建，输出到 `books/` 与 `packages/engine/public/books/`）+ 合成 EPUB fixture（fixed-layout / nav-hidden / reflow）
 - 完成定义：lsp_diagnostics 干净 + build / test 通过
 
 ## 9. Git 规则（继承全局，重申）

@@ -232,7 +232,9 @@ kill <PID>                    # 清理残留（确认非当前会话所需）
 ## 测试策略
 
 - **单元测试**：vitest（各 package `src/*.test.ts`）
-- **EPUB 回归语料**：`books/*.epub`（含芒格）+ 合成 EPUB fixture
+- **EPUB 回归语料**：`books/*.epub`（不入库；合成 fixture 由脚本重建，真实 EPUB 需自备）
+  - 生成合成 fixture：`node scripts/make-fixture.mjs`（输出到 `books/` 与 `packages/engine/public/books/`）
+  - 合成 fixture：`fixture-fixed-layout` / `fixture-nav-hidden` / `fixture-reflow`（引擎与 app E2E 共用）
 - **E2E**：Playwright（`packages/app/tests/`，v1 后期启用）
 - **完成定义**：lsp_diagnostics 干净 + build/test 通过
 
