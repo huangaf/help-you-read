@@ -122,3 +122,43 @@ Reader 在 `loadBook` 后调用 `init()`，并轮询 `render()` 直至内容就�
 见 §5 验证结果表：E2E 5/5、Engine 64/64、Core 157/157、Engine tsc exit 0。
 
 
+
+## 9. AI 对话 + RAG 索引管道（第三轮）
+
+### 9.1 AI 对话经 CoreService 接入 RAG + SSE 流式
+**问题**：`AIChat.tsx` 浏览器直连 oMLX（硬编码 API key）、非流式、**完全未使用 RAG**；`CoreService` 无 chat 方法。
+
+**实现**（commit `7a38931`）：
+| 文件 | 变更 |
+|------|------|
+| `core/src/ai/providers.ts` | `chatStream`（OpenAI 兼容 SSE 解析；跨 chunk 边界 + 多字节 UTF-8 安全；校验型 JSON 解析，无 `any`） |
+| `core/src/ai/types.ts` | `ChatStreamChunk` |
+| `app/core-service.ts` | `chat` / `chatStream`（history → embed → `HybridRetriever.search` → 增强 prompt → provider → 持久化）；检索器单例复用；修复 `retrieval.search` 参数签名 bug |
+| `app/vite-plugin-core.ts` | `POST /api/chat/stream` SSE 端点（独立于 `/api/core`） |
+| `app/src/services/core.ts` | `CoreClient.chatStream`（SSE 客户端解析） |
+| `app/src/pages/AIChat.tsx` | 改用 `chatStream`；**移除浏览器端硬编码 API key** |
+
+### 9.2 RAG 索引管道（使检索真正可用）
+**问题**：`sqlite.ts` 未加载 sqlite-vec；无 `chunks_vec` 表；无索引入口 → **生产 RAG 恒返回空**。
+
+**实现**：
+| 文件 | 变更 |
+|------|------|
+| `core/src/db/vec.ts` | `loadVecExtension`（幂等）+ `ensureChunksVecTable`（维度自适应，变更时重建） |
+| `core/src/ai/indexer.ts` | `BookIndexer`（chunk → embed → 写 `chunks` + `chunks_vec` + `vector_index_provenance`；同书重建；维度校验） |
+| `core/src/ai/indexer.test.ts` | 4 例（可检索命中 / 空文本 / 重建替换 / 维度不一致抛错） |
+| `app/core-service.ts` | `indexBook` + `#indexer`（vec 不可用降级）+ `#aiConfig` |
+| `app/vite-plugin-core.ts` + `app/src/services/core.ts` | `indexBook` 分派 / 客户端方法 |
+| `app/tests/e2e.spec.ts` | S9：索引 → RAG → 流式回复（真实 LLM） |
+
+**关键事实**：embedding 维度 = 1024（`Qwen3-Embedding-0.6B-8bit`）；`#searchFts` 实为 LIKE 查询（非 FTS5），故仅需 `chunks_vec`。
+
+### 9.3 验证（第三轮）
+| 检查项 | 结果 |
+|--------|------|
+| Engine 单测 | 64/64 |
+| Core 单测 | **164/164**（+3 chatStream、+4 indexer） |
+| E2E | **6/6**（S1/S2/S3/S7/S8/S9） |
+| tsc（engine/core/app） | 全 exit 0 |
+| build | exit 0 |
+| curl RAG 实测 | `indexBook` chunks=1 → `chat` citations=1（LLM 使用检索原文）→ `chatStream` final 含 citations（source=vector） |
