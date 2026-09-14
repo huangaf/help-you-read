@@ -20,3 +20,8 @@ packages/engine/public/books/
 
 # 书籍语料（真实 EPUB 版权/体积；合成 fixture 由 scripts/make-fixture.mjs 重建）
 books/
+
+# 环境变量（含密钥，不入库；模板见 .env.example）
+.env
+.env.local
+.env.*.local
